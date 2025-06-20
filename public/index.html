@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-100 p-4">
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-center mb-6">🏆 Real-Time Leaderboard</h1>
+
+    <!-- Score Update Form -->
+    <div class="bg-white p-6 rounded shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4">Update Player Score</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <input type="text" id="username" placeholder="Username" class="input" />
+        <input type="number" id="score" placeholder="Score to Add" class="input" />
+        <input type="text" id="region" placeholder="Region (e.g., Asia)" class="input" />
+        <input type="text" id="gameMode" placeholder="Game Mode (e.g., Solo)" class="input" />
+        <button onclick="updateScore()" class="col-span-2 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+          Submit Score
+        </button>
+      </div>
+    </div>
+
+    <!-- Leaderboard Filter -->
+    <div class="bg-white p-6 rounded shadow mb-6">
+      <h2 class="text-xl font-semibold mb-4">Leaderboard</h2>
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <input type="number" id="topN" placeholder="Top N" class="input" />
+        <input type="text" id="filterRegion" placeholder="Region" class="input" />
+        <input type="text" id="filterMode" placeholder="Game Mode" class="input" />
+      </div>
+      <button onclick="getLeaderboard()" class="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+        Fetch Leaderboard
+      </button>
+    </div>
+
+    <!-- Display Leaderboard -->
+    <div id="leaderboard" class="bg-white p-6 rounded shadow">
+      <h3 class="text-lg font-semibold mb-2">Players:</h3>
+      <ul id="playersList" class="space-y-2"></ul>
+    </div>
+  </div>
+
+  <style>
+    .input {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 0.375rem;
+      width: 100%;
+    }
+  </style>
+
+  <script>
+    // Connect to Socket.IO backend
+    const socket = io("http://localhost:5000", {
+      transports: ["websocket"], // Prevents polling error sometimes
+    });
+
+    socket.on("connect", () => {
+      console.log(" Connected to WebSocket");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error(" Socket connection error:", err);
+    });
+
+    socket.on("score_updated", (player) => {
+      console.log(" Real-time update:", player);
+      getLeaderboard(); // Refresh leaderboard on update
+    });
+
+    // Submit score
+    const updateScore = () => {
+      const username = document.getElementById("username").value;
+      const score = Number(document.getElementById("score").value);
+      const region = document.getElementById("region").value;
+      const gameMode = document.getElementById("gameMode").value;
+
+      if (!username || !score) {
+        alert("Username and score are required.");
+        return;
+      }
+
+      socket.emit("update_score", { username, score, region, gameMode });
+    };
+
+    // Fetch leaderboard
+    const getLeaderboard = async () => {
+  const topN = document.getElementById("topN").value;
+  const region = document.getElementById("filterRegion").value;
+  const gameMode = document.getElementById("filterMode").value;
+
+  let url = "http://localhost:5000/api/leaderboard";
+
+  if (region || gameMode) {
+    const query = new URLSearchParams();
+    if (region) query.append("region", region);
+    if (gameMode) query.append("gameMode", gameMode);
+    url += `/filter?${query.toString()}`;
+  } else {
+    url += `/top/${topN || 10}`;
+  }
+
+  // Paste log here
+  console.log("Fetching leaderboard from:", url);
+
+  try {
+    const res = await axios.get(url);
+    const players = res.data;
+
+    const list = document.getElementById("playersList");
+    list.innerHTML = "";
+
+    players.forEach((p, i) => {
+      const li = document.createElement("li");
+      li.textContent = `${i + 1}. ${p.username} - ${p.score} (${p.region}, ${p.gameMode})`;
+      list.appendChild(li);
+    });
+  } catch (error) {
+    console.error("Failed to fetch leaderboard:", error);
+    alert("Error fetching leaderboard. Check server console.");
+  }
+};
+
+
+    //Initial fetch
+    getLeaderboard();
+  </script>
+</body>
+</html>
